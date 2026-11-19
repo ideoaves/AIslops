@@ -1,0 +1,167 @@
+:root {
+  --c-main:    #fff;
+  --c-sub:     #eee;
+  --back:      #000;
+  --highlight: yellow;
+}
+
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  overflow: hidden;
+  background: var(--back);
+  color: var(--c-main);
+  font: 11px/1.5 system-ui, sans-serif;
+  user-select: none;
+}
+
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+h1 { font-size: 13px; font-weight: normal; }
+h2 { font-weight: normal; color: var(--c-sub); }
+
+h2, #toolbar button, .hint, .tag, .new, .row { font-size: 10px; }
+
+
+#toolbar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 200;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background: var(--back);
+  border-bottom: 1px solid var(--c-sub);
+}
+#toolbar h1 { margin-right: 8px; white-space: nowrap; }
+
+#editor {
+  position: fixed;
+  top: 48px;
+  left: 0;
+  z-index: 150;
+  width: 280px;
+  padding: 10px;
+  background: var(--back);
+  border-right:  1px solid var(--c-sub);
+  border-bottom: 1px solid var(--c-sub);
+}
+
+#canvas { position: fixed; inset: 48px 0 0; }
+svg { display: block; width: 100%; height: 100%; }
+#bg { fill: var(--back); }
+#vp { transform-origin: 0 0; }
+
+
+#toolbar button, .new > * {
+  padding: 5px 8px;
+  border: 1px solid var(--c-main);
+  background: var(--back);
+}
+#toolbar button:hover, .new button:hover { background: rgba(255,255,255,0.15); }
+
+
+.line, .arrow {
+  fill: none;
+  stroke: var(--c-sub);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+
+.link.selected    .line, .link.selected    .arrow,
+.link.highlighted .line, .link.highlighted .arrow {
+  stroke: var(--highlight);
+  stroke-width: 2;
+}
+.link.highlighted .line { stroke-dasharray: 4 3; }
+
+.label { color: var(--c-sub); text-align: center; white-space: nowrap; }
+
+
+[data-group-id] {
+  fill: transparent;
+  stroke: var(--group-color);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+[data-group-id].highlighted {
+  fill-opacity: 0.18;
+  stroke: var(--highlight);
+  stroke-width: 2;
+}
+
+.title { fill: var(--group-color); font-size: 13px; pointer-events: none; }
+
+
+.card {
+  width: 160px;
+  padding: 8px;
+  overflow: hidden;
+  background: var(--back);
+  border: 1px solid var(--c-sub);
+  border-top: 4px solid var(--c-main);
+  pointer-events: none;
+}
+.handle { fill: transparent; cursor: grab; }
+
+.name, .info, .label { outline: none; cursor: text; pointer-events: auto; }
+
+.card .name { margin-bottom: 4px; }
+
+.info {
+  width: 100%;
+  min-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.info:focus { background: rgba(255,255,255,0.05); }
+
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tag  { padding: 0 6px; background: var(--group-color, #888); }
+
+
+#editor h2 {
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#target { color: var(--highlight); }
+.hint { color: var(--c-sub); }
+
+.section + .section { margin-top: 8px; }
+.new { display: flex; gap: 4px; }
+.new input[type="text"] { flex: 1; min-width: 0; }
+
+.list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
+.row  { display: flex; align-items: center; gap: 6px; }
+.row > input[type="checkbox"], .row .hex, .row .del { flex-shrink: 0; }
+
+.row .name {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  background: none;
+}
+.row .name:hover { border-color: var(--c-sub); }
+.row .name:focus { border-color: var(--c-main); }
+
+.del { width: 16px; border: none; background: none; color: var(--c-sub); }
+.del:hover { color: var(--highlight); }
+
+
+.hex { display: flex; align-items: center; gap: 4px; }
+.hex .chip { width: 14px; height: 14px; border: 1px solid var(--c-sub); }
+.hex input { width: 7ch; border: none; background: none; }
+.hex.invalid input { color: #f66; }
+
+.hex.collapsible .chip { cursor: pointer; }
+.hex.collapsible .chip:hover { border-color: var(--c-main); }
+.hex.collapsed input { display: none; }

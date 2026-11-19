@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>space_game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --紙: #dcd9d0;
+    --淡: #7d7a73;
+    --罫: #dcd9d066;
+    --墨: #0b0b0b;
+    --危険: #ff4b3a;
+    --安全: #6be38f;
+    --書体: 'Inter Tight', sans-serif;
+  }
+  body {
+    margin: 0; overflow: hidden; background: #000; color: var(--紙);
+    font: 600 10px/1.2 var(--書体); text-transform: uppercase; letter-spacing: 0.01em;
+  }
+  canvas { display: block; }
+
+  /* 画面全体にかけるフィルムの粒子 */
+  #粒子 {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.14; mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -0.5'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* 画面の四隅の十字トンボ */
+  .角 {
+    position: fixed; width: 56px; height: 56px; pointer-events: none;
+    background:
+      linear-gradient(var(--紙), var(--紙)) 16px 0 / 1px 100% no-repeat,
+      linear-gradient(var(--紙), var(--紙)) 0 16px / 100% 1px no-repeat;
+  }
+  .角.左上 { left: 12px; top: 12px; }
+  .角.右上 { right: 12px; top: 12px; transform: scaleX(-1); }
+  .角.左下 { left: 12px; bottom: 12px; transform: scaleY(-1); }
+  .角.右下 { right: 12px; bottom: 12px; transform: scale(-1); }
+
+  /* 右下角を斜めに切り落とした細線の枠のボタン */
+  button {
+    position: relative; padding: 6px 18px 6px 10px; cursor: pointer; white-space: nowrap; text-align: left;
+    font: 700 10px/1.1 var(--書体); text-transform: uppercase; letter-spacing: 0.02em;
+    color: var(--紙); background: var(--墨); border: 1px solid var(--紙); border-radius: 0;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  }
+  button::after {
+    content: ''; position: absolute; right: -3px; bottom: 4px; width: 15px; height: 1px;
+    background: var(--紙); transform: rotate(-45deg);
+  }
+  button:hover, button.作動中 { color: var(--墨); background: var(--紙); }
+  button.作動中::after { background: var(--墨); }
+  button.待機中 { animation: 反転 0.9s steps(1) infinite; }
+  @keyframes 反転 { 50% { color: var(--墨); background: var(--紙); } }
+
+  /* 選択中の天体：天体自体は隠さず、少し離れた所から引き出し線で写真・名前・距離をつなぐ */
+  #目標 { position: fixed; width: 0; height: 0; }
+  #目標情報 { position: absolute; left: 10px; top: -28px; display: flex; gap: 8px; pointer-events: none; white-space: nowrap; }
+  #目標情報[hidden] { display: none; }
+  #目標情報::before { content: ''; width: 36px; margin-top: 28px; border-top: 1px solid var(--紙); }
+  .写真 { display: flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; background: #000; border: 1px solid var(--紙); }
+  .写真 img { display: block; width: 100%; height: 100%; }
+  /* 情報タブの写真はパディングの内側いっぱいの正方形 */
+  #情報写真 { display: block; width: 100%; aspect-ratio: 1; margin: 0 0 12px; box-sizing: border-box; border: 1px solid var(--紙); background: #000; }
+  #情報写真[hidden] { display: none; }
+  /* 近づいて天体そのものが写真より大きく見えたら消す（表示・非表示の動きはJSのsetShownで統一） */
+  #目標写真 { width: 56px; height: 56px; }
+  #目標写真[hidden] { display: none; }
+  .目標名 { margin-top: 6px; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; line-height: 1; }
+  .目標副 { margin-top: 4px; color: var(--紙); }
+  .目標副 span { display: block; }
+  #情報ボタン { margin-top: 8px; pointer-events: auto; }
+
+  /* 惑星圏の航法標識：順行・逆行・外向き・内向き */
+  .標識 { position: fixed; display: flex; align-items: center; gap: 4px; margin: -8px 0 0 -8px; pointer-events: none; white-space: nowrap; }
+  .標識[hidden] { display: none; }
+  .標識 i {
+    display: flex; align-items: center; justify-content: center; width: 14px; height: 14px;
+    border: 1px solid var(--紙); border-radius: 50%; font: 700 10px/1 var(--書体); font-style: normal;
+  }
+  .逆行 i, .内向き i { border-style: dashed; }
+  /* 画面中央下：SASの方向ボタン列と、Interstellar／惑星圏脱出ボタン */
+  #中央下 { position: fixed; left: 0; right: 0; bottom: 28px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #中央下 button { pointer-events: auto; }
+  .姿勢 { display: flex; align-items: center; gap: 6px; }
+  .姿勢 span { margin-right: 4px; font-weight: 700; }
+  .姿勢 button { padding: 5px 14px 5px 8px; }
+  #恒星間ボタン { padding: 8px 26px 8px 14px; font-size: 11px; }
+
+  /* 左に常設のCondition、右端から出る天体情報 */
+  .タブ {
+    position: fixed; top: 28px; width: 300px; max-height: calc(100vh - 56px); overflow: auto; box-sizing: border-box;
+    padding: 12px 14px 16px; background: #0b0b0bf2; border: 1px solid var(--紙);
+    scrollbar-width: none;
+  }
+  #状態タブ {
+    left: 28px; display: flex; flex-direction: column; overflow: hidden;
+  }
+  #状態タブ .中身 { flex: 0 1 auto; min-height: 0; overflow: auto; scrollbar-width: none; }
+
+  /* 船の機首方向を示す十字。視点を動かすと機首のある位置へずれる */
+  #機首 {
+    position: fixed; width: 29px; height: 29px; margin: -14px 0 0 -14px; pointer-events: none;
+    background:
+      linear-gradient(var(--紙), var(--紙)) 0 14px / 10px 1px no-repeat,
+      linear-gradient(var(--紙), var(--紙)) 19px 14px / 10px 1px no-repeat,
+      linear-gradient(var(--紙), var(--紙)) 14px 0 / 1px 10px no-repeat,
+      linear-gradient(var(--紙), var(--紙)) 14px 19px / 1px 10px no-repeat;
+  }
+  canvas { cursor: grab; }
+  canvas.見渡し中 { cursor: grabbing; }
+  #情報タブ { right: 28px; max-height: calc(100vh - 140px); z-index: 2; }
+
+  /* SASの計算を流すCUIの記録欄 */
+  .端末 {
+    flex: none; height: 140px; margin: 0; padding: 6px 8px; overflow: hidden; box-sizing: border-box;
+    font: 500 9px/1.4 Consolas, ui-monospace, monospace; text-transform: none; white-space: pre-wrap; word-break: break-all;
+    color: var(--紙); background: #000; border: 1px solid var(--罫);
+  }
+  .端末::after { content: '█'; animation: 明滅 1s steps(1) infinite; }
+  @keyframes 明滅 { 50% { opacity: 0; } }
+  .閉じる {
+    position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; padding: 0; text-align: center;
+    font: 500 12px/1 var(--書体); border-radius: 50%; clip-path: none;
+  }
+  .閉じる::after { display: none; }
+  .見出し { margin: 0 28px 10px 0; font-size: 22px; font-weight: 700; line-height: 0.9; letter-spacing: -0.02em; }
+  .通し番号 { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; color: var(--紙); }
+  .通し番号::after { content: ''; flex: 1; border-top: 1px solid var(--罫); }
+  .小見出し { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 10px; font-weight: 700; }
+  .小見出し::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--紙); }
+  .小見出し::after { content: ''; flex: 1; border-top: 1px solid var(--罫); }
+  .行 { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; }
+  .行 span { color: var(--淡); }
+  .行 i { flex: 1; border-top: 1px solid #dcd9d026; transform: translateY(-3px); }
+  .行 b { font-weight: 600; text-align: right; }
+  .一覧 { margin: 0; padding: 0; list-style: none; }
+  .一覧 li::before { content: '> '; }
+  .星名 { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .惑星表 { width: 100%; border-collapse: collapse; }
+  .惑星表 th { font-weight: 600; color: var(--淡); text-align: right; padding: 3px 0; border-bottom: 1px solid var(--紙); }
+  .惑星表 td { text-align: right; padding: 3px 0; border-bottom: 1px solid #dcd9d026; }
+  .惑星表 th:first-child, .惑星表 td:first-child { text-align: left; }
+  .惑星色 { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+  .ゲージ {
+    position: relative; height: 18px; margin: 6px 0 4px;
+    background: repeating-linear-gradient(90deg, #dcd9d040 0 1px, transparent 1px 4px);
+  }
+  .ゲージ i { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(90deg, var(--紙) 0 2px, transparent 2px 4px); }
+  .ゲージ目盛 { display: flex; justify-content: space-between; margin-bottom: 6px; color: var(--淡); }
+  .空 { margin: 0; color: var(--淡); }
+  /* 衝突予想のときの危険な値だけ赤く点滅させる（点滅はJSで消灯クラスを切り替える） */
+  .行.危険 b { color: var(--危険); }
+  .行.危険.消灯 b { color: var(--淡); }
+  /* 右下：MAPボタンと時間加速。時間加速は作中の計器ではなく操作なので、Conditionとは別の枠にしてDATAタブと右端をそろえる */
+  #右下 { position: fixed; right: 28px; bottom: 28px; display: flex; align-items: flex-end; gap: 10px; }
+  #時間加速 { width: 300px; box-sizing: border-box; padding: 10px 14px 6px; background: #0b0b0bf2; border: 1px solid var(--紙); }
+  #時間加速 .小見出し { margin-top: 0; }
+
+  /* 星図：Conditionの右から右端までの大きな枠に3Dの星図を出す */
+  #地図 {
+    position: fixed; left: 356px; right: 28px; top: 28px; bottom: 112px; display: flex; flex-direction: column;
+    box-sizing: border-box; padding: 12px 14px 14px; background: #0b0b0bf2; border: 1px solid var(--紙); z-index: 1;
+  }
+  #地図[hidden] { display: none; }
+  .地図描画 { position: relative; flex: 1; min-height: 0; overflow: hidden; border: 1px solid var(--罫); }
+  .地図描画 canvas { display: block; cursor: grab; }
+  .地図名 { position: absolute; margin: -16px 0 0 8px; pointer-events: none; white-space: nowrap; font-size: 10px; }
+  .地図名.選択 { color: #fff; font-weight: 700; }
+  /* 星図で星をダブルクリックすると出る、その星系の天体一覧 */
+  .地図一覧 {
+    position: absolute; bottom: 10px; left: 10px; z-index: 1; width: 240px; max-height: calc(100% - 20px); overflow: auto; box-sizing: border-box;
+    padding: 10px 12px; background: #0b0b0bf2; border: 1px solid var(--紙); scrollbar-width: none;
+  }
+  .地図一覧[hidden] { display: none; }
+  .地図一覧 h3 { margin: 0 0 8px; font-size: 12px; }
+  .一覧行 { display: flex; gap: 4px; margin: 0 0 4px; }
+  .地図一覧 button { display: flex; justify-content: space-between; flex: 1; min-width: 0; padding: 4px 8px; clip-path: none; font-weight: 600; }
+  .地図一覧 button.一覧情報 { flex: none; padding: 4px 6px; }
+  .地図一覧 button::after { display: none; }
+  .地図一覧 button.衛星 { padding-left: 20px; }
+  .地図一覧 button span { color: var(--淡); }
+  .加速 { display: flex; align-items: flex-start; gap: 12px; }
+  .加速軸 { flex: 1; padding: 0 4px; }
+  #加速つまみ { display: block; width: 100%; height: 14px; margin: 0; appearance: none; background: transparent; cursor: pointer; }
+  #加速つまみ::-webkit-slider-runnable-track { height: 1px; background: var(--紙); }
+  #加速つまみ::-webkit-slider-thumb { appearance: none; width: 8px; height: 14px; margin-top: -7px; background: var(--紙); border: none; border-radius: 0; }
+  #加速つまみ::-moz-range-track { height: 1px; background: var(--紙); }
+  #加速つまみ::-moz-range-thumb { width: 8px; height: 14px; background: var(--紙); border: none; border-radius: 0; }
+  .加速目盛 { position: relative; height: 12px; margin-top: 2px; color: var(--淡); }
+  .加速目盛 span { position: absolute; transform: translateX(-50%); }
+  #加速表示 { min-width: 64px; font-weight: 700; text-align: right; }
+</style>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="目標">
+  <div id="目標情報" hidden><div><div id="目標写真" class="写真"></div><div id="目標本文"></div><button id="情報ボタン" tabindex="-1">Info</button></div></div>
+</div>
+<div id="機首" hidden></div>
+<div class="標識 順行" hidden><i>•</i>Pro</div>
+<div class="標識 逆行" hidden><i>×</i>Retro</div>
+<div class="標識 外向き" hidden><i>+</i>Rad out</div>
+<div class="標識 内向き" hidden><i>−</i>Rad in</div>
+<div id="中央下">
+  <div class="姿勢">
+    <span>SAS</span>
+    <button tabindex="-1" data-姿勢="off" class="作動中">Off</button>
+    <button tabindex="-1" data-姿勢="target">Target</button>
+    <button tabindex="-1" data-姿勢="pro">Pro</button>
+    <button tabindex="-1" data-姿勢="retro">Retro</button>
+    <button tabindex="-1" data-姿勢="radout">Rad out</button>
+    <button tabindex="-1" data-姿勢="radin">Rad in</button>
+  </div>
+  <button id="恒星間ボタン" tabindex="-1" hidden>Interstellar</button>
+</div>
+<section id="情報タブ" class="タブ" hidden><button class="閉じる" tabindex="-1">×</button><div class="中身"></div></section>
+<section id="状態タブ" class="タブ"><div class="中身"></div>
+  <h3 class="小見出し">SAS log</h3>
+  <pre id="記録" class="端末"></pre>
+</section>
+<section id="地図" hidden>
+  <button class="閉じる" tabindex="-1">×</button>
+  <h2 class="見出し">Star<br>Map</h2>
+  <div class="地図描画"><div class="地図一覧" hidden></div></div>
+</section>
+<div id="右下">
+<button id="地図ボタン" tabindex="-1">Map</button>
+<section id="時間加速">
+  <h3 class="小見出し">Time warp</h3>
+  <div class="加速">
+    <div class="加速軸">
+      <input type="range" id="加速つまみ" min="0" max="7.49911" step="any" value="0" tabindex="-1">
+      <div class="加速目盛"><span style="left:0%">s</span><span style="left:23.7%">min</span><span style="left:47.4%">h</span><span style="left:65.8%">d</span><span style="left:100%">y</span></div>
+    </div>
+    <b id="加速表示">1.00 s/s</b>
+  </div>
+</section>
+</div>
+<div class="角 左上"></div><div class="角 右上"></div><div class="角 左下"></div><div class="角 右下"></div>
+<div id="粒子"></div>
+<script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "切り抜きテロップ化",
+  "version": "1.0",
+  "description": "ウェブページの文字をYouTube切り抜き風のテロップ装飾にする",
+  "permissions": ["scripting", "activeTab"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "切り抜きテロップ ON/OFF" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
