@@ -22,7 +22,7 @@
 - Python 3, Pillow, opencv-python。
 
 ## 画像プロットツール
-画像を類似度で2次元面にプロットするツール。画像整理に使えます。
+画像を特徴量で2次元面にプロットするツール。画像整理に使えます。
 - numpy, pillow, scikit-learn, scipy
 
 なおタグ検索はAIモデルを使っています。
