@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QSplitter, QT
                                QLabel, QVBoxLayout, QHBoxLayout, QSlider, QGraphicsView, QAbstractButton,
                                QGraphicsScene, QGraphicsItem, QMenu, QMessageBox, QPushButton, QFileDialog, QLineEdit)
 
-ROOT = r"J:\memory"
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache.sqlite")
 EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tif", ".tiff")
 WORKERS = 2
@@ -312,6 +311,19 @@ def space_out(coords):
         return relax(c + move, left - 1)
 
     return relax(c, SPACE_ITERS)
+
+
+def true_case(path):
+    path = os.path.normpath(path)
+    parent, name = os.path.split(path)
+    if not name:
+        return path[:1].upper() + path[1:]
+    parent = true_case(parent)
+    try:
+        name = next((n for n in os.listdir(parent) if n.lower() == name.lower()), name)
+    except OSError:
+        pass
+    return os.path.join(parent, name)
 
 
 def dir_key(d):
@@ -759,7 +771,9 @@ class MainWindow(QMainWindow):
         self.clip = None
         self.clipEmb = self.searchMask = None
         self.settings = QSettings("ImageMap", "ImageMap")
-        self.root = self.settings.value("root", ROOT)
+        self.root = self.settings.value("root", "")
+        self.root = true_case(self.root) if self.root and os.path.isdir(self.root) else self.root
+        self.folderPrefix = ""
         self.status = QLabel()
         pick = QPushButton("フォルダ選択")
         pick.clicked.connect(self.choose_folder)
@@ -808,12 +822,16 @@ class MainWindow(QMainWindow):
         self.infoTimer = QTimer(singleShot=True, interval=60, timeout=self.show_info)
         self.scene.selectionChanged.connect(self.selection_changed)
         self.worker = None
-        self.load_root()
+        if self.root and os.path.isdir(self.root):
+            self.load_root()
+        else:
+            self.status.setText("フォルダを選択してください")
+            QTimer.singleShot(0, self.choose_folder)
 
     def choose_folder(self):
-        d = QFileDialog.getExistingDirectory(self, "画像フォルダを選択", self.root)
+        d = QFileDialog.getExistingDirectory(self, "画像フォルダを選択", self.root or os.path.expanduser("~/Pictures"))
         if d:
-            self.root = os.path.normpath(d)
+            self.root = true_case(d)
             self.settings.setValue("root", self.root)
             self.load_root()
 
