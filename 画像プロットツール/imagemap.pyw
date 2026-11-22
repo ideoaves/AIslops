@@ -831,6 +831,7 @@ class MainWindow(QMainWindow):
     def choose_folder(self):
         d = QFileDialog.getExistingDirectory(self, "画像フォルダを選択", self.root or os.path.expanduser("~/Pictures"))
         if d:
+            self.save_view()
             self.root = true_case(d)
             self.settings.setValue("root", self.root)
             self.load_root()
@@ -1020,9 +1021,27 @@ class MainWindow(QMainWindow):
         first = self.coords is None
         self.coords = (coords - coords.min(0)) / np.maximum(np.ptp(coords, 0), 1e-9)
         self.apply_layout()
-        if first:
+        if not first:
+            return
+        saved = json.loads(self.settings.value("views", "{}")).get(dir_key(self.root))
+        if saved:
+            size, zoom, cx, cy = saved
+            self.slider.setValue(size)
+            self.view.resetTransform()
+            self.view.scale(zoom / self.sceneSize, zoom / self.sceneSize)
+            self.view.centerOn(cx * self.sceneSize, cy * self.sceneSize)
+        else:
+            self.slider.setValue(SIZE_DEFAULT)
             self.view.fitInView(QRectF(0, 0, self.sceneSize, self.sceneSize), Qt.KeepAspectRatio)
-            self.view.update_size()
+        self.view.update_size()
+
+    def save_view(self):
+        if self.coords is None:
+            return
+        views = json.loads(self.settings.value("views", "{}"))
+        c = self.view.mapToScene(self.view.viewport().rect().center())
+        views[dir_key(self.root)] = [self.slider.value(), self.view.transform().m11() * self.sceneSize, c.x() / self.sceneSize, c.y() / self.sceneSize]
+        self.settings.setValue("views", json.dumps(views))
 
     def apply_layout(self):
         if self.coords is None or len(self.coords) != len(self.items):
@@ -1054,6 +1073,7 @@ class MainWindow(QMainWindow):
                           f"{datetime.fromtimestamp(item.ts):%Y-%m-%d %H:%M:%S}")
 
     def closeEvent(self, e):
+        self.save_view()
         self.worker.requestInterruption()
         self.worker.wait(3000)
         os._exit(0)
